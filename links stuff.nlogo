@@ -1,253 +1,50 @@
-; Kevin Hernandez and Felix Velez
-; CSCI 390
-; Professor Dickerson
-; 5/4/2018
-; TERM PROJECT - Ross Dining Hall simulation
 
-globals [
-  preference-list                ; a list of the possible food preferences to be chosen at random
-  patience-list                  ; more specific variations for student patience
-  grab-food-time                 ; time it takes to get a plate of food when at a station
-  students-got-food-count        ; # of students that have gotten food
-  students-leaving-hungry-count  ; # of students who leave without getting a full meal
-
-  ;easier to know which patch we're talking about
-  meat
-  salad
-  pizza
-  pasta
-
-  ;Will be sets of possible choices a student can make at each station
-  options-entrance
-  options-meat-station
-  options-pasta-station
-  options-salad-station
-
-]
-
-breed [ students student ]
-
-patches-own [
-  is-exit?         ; true for the red patches agents exit through.
-  is-entrance?     ; true for the blue patches agents enter from.
-  is-wall?         ; true for the gray patches
-  meat?            ; true if meat station
-  pizza?           ; true if pizza station
-  salad?           ; true if salad station
-  pasta?           ; true if pasta station
-  servings-left    ; countdown until a station needs to refill its tray of food
-  refill-timer ; countdown before a tray is refilled with food
-]
-
-students-own [
-  patience         ; amount of time a student will wait to get food
-;  food-choice-1
-;  food-choice-2
-;  got-food-1?
-;  got-food-2?
-  grab-food-timer  ; a decreasing value as the student is getting food at a station
-  target           ; student's destination patch based on optional choices at each station
-
-]
+globals[follower]
+breed [dudes dude]
 
 to setup
   ca
-  reset-ticks
-  setup-patches
-  set grab-food-time 10
-  set students-got-food-count 0
-  set students-leaving-hungry-count 0
-end
-
-;Initialize patches
-to setup-patches
-  ; Initialize all necessary variables first
-  ask patches[
-    set is-exit? false
-    set is-entrance? false
-    set is-wall? false
-    set pizza? false
-    set salad? false
-    set meat? false
-    set pasta? false
-    set servings-left serving-count
-    set refill-timer serving-count * 5
+  crt n[
+    setxy who random-ycor
+    set label who
+    set heading 0
   ]
-  ; Import a picture of a simple layout of Ross food stations
-  import-pcolors "ross-pixelated.png"
-
-  ; Set each entrance, exit, station, and wall based on color
-  ask patches with [pcolor = 14.9] [set is-exit? true]
-  ask patches with [pcolor = 2.9] [set is-wall? true]
-  ask one-of patches with [pcolor = 95.1] [set is-entrance? true]
-  ask one-of patches with [pcolor = 64.9]  [set salad? true set salad self ]
-  ask one-of patches with [pcolor = 125.7] [set meat? true  set meat self  ]
-  ask one-of patches with [pcolor = 44.9]  [set pizza? true set pizza self ]
-  ask one-of patches with [pcolor = 116.9] [set pasta? true set pasta self ]
-
-  ; Set up the options at each station (each variable is a set of patches agents will randomly
-  ;    choose from when they reach their respective station)
-  set options-entrance (patch-set salad meat meat meat meat meat pizza)
-  set options-meat-station (patch-set pasta pizza (one-of patches with [is-exit?]))
-  set options-pasta-station (patch-set pizza (one-of patches with [is-exit?]) )
-  set options-salad-station (patch-set pizza meat (one-of patches with [is-exit?]))
-
-  setup-links
-end
-
-to show-paths
-  ask links [ set hidden? false ]
-end
-
-to setup-links
-  ask patch 23 0 [  ]
-end
-
-; Core function
-to move
-  if random-float 1.0 < p-student and any? patches with [is-entrance? and not any? turtles-here][
-    spawn-student
-  ]
-
-  ask students[
-
-    ;turtles only move if there is not a station or another person in front of them
-    ;    UNLESS they are heading towards the exit
-    ifelse (not any? other turtles in-cone 2 30 and (not any? patches with [meat? or pizza? or salad? or pasta? or is-wall?] in-cone 2 15))[
-      fd 0.5
-    ][
-      ifelse [is-exit?] of target [
-        fd .5
-      ][
-        ; this statement implies the student is not moving, so decrease their patience timer
-        if not any? patches in-radius 3 with [meat? or salad? or pasta? or pizza?] [ ;only decrease patience timer if not getting food
-          set patience patience - 1
-        ]
-
-        ; if student reaches its patience limit, then just go to the exit and leave angrily!
-        ; student color becomes red for visualization
-        if patience = 0[
-          set target one-of patches with [is-exit?]
-          face target
-          set color red
-        ]
-      ]
+  let temp (count turtles) - 1
+  show temp
+  while [temp > 0][
+    ask turtle temp [
+      create-link-with turtle (temp - 1)
     ]
-
-
-    ; Checks if an agent has reached a station and has it grab food
-    if any? patches with [meat? or pizza? or pasta? or salad?] in-radius 2[
-      get-food
-    ]
-
-    ; Update counts of students who were able to eat and who left hungry
-    ;     kill each agent when they reach the exit.
-    if [is-exit?] of patch-here [
-      ifelse patience = 0[
-        set students-leaving-hungry-count students-leaving-hungry-count + 1
-      ][
-        set students-got-food-count students-got-food-count + 1
-      ]
-      die
-    ]
-  ]
-
-  ; If food-shortage is on, updates food left and refill times
-  if food-shortage? [ ask patches with [pcolor = brown] [food-trays] ]
-  wait 0.025
-  tick
-end
-
-
-; Agents need a few seconds to grab their food!
-to get-food
-  if [pcolor] of target != brown[
-    set grab-food-timer grab-food-timer - 1
-  ]
-
-  if grab-food-timer < 0[
-
-    ; If food-shortage is on, the amount of food decreases at the station each time a student gets food.
-    if food-shortage? [
-      ask patch [pxcor] of target [pycor] of target [
-       set servings-left servings-left - 1
-       if servings-left = 0 [
-         set pcolor brown
-        ]
-      ]
-    ]
-
-    ; Student has gotten food at current stations and will choose new target patch
-    new-target
-
-    ; reset the grab-food-timer variable for next time
-    set grab-food-timer grab-food-time
+    set temp temp - 1
   ]
 end
 
 
-; Has agents randomly choose a new target patch when they've gotten food at a station
-to new-target
-
-    ; Check which station they are by and randomly choose a possible decision from there
-    if any? patches in-cone 2 15 with [meat?] [
-      set target one-of options-meat-station
-      if target = pizza or [is-exit?] of target [ fd 1]
-      face target
-    ]
-    if any? patches in-cone 2 15 with [pasta?] [
-      set target one-of options-pasta-station
-      face target
-    ]
-    if any? patches in-cone 2 15 with [salad?] [
-      set target one-of options-salad-station
-      face target
-    ]
-    if any? patches in-cone 2 15 with [pizza?] [
-      set target one-of patches with [is-exit?]
-      face target
-    ]
-end
-
-
-; Spawn 20 students in the dining hall with variables initialized randomly
-to spawn-student
-  if count students < student-count [    ; at least for now, limit number of students that can be in the dining hall
-    create-students 1 [
-      move-to one-of patches with [is-entrance? and not any? turtles-here]   ;spawn at the entrance
-      set grab-food-timer grab-food-time
-      set size 2
-      set color (blue - 1 + random-float 4) ; set varied color for nice visualization
-      set shape "person"
-      set patience 60 ; randomly choose amount of time to wait until the student is fed up with waiting (between 1 minute and 15 minutes)
-
-      set target one-of options-entrance
-      face target
-    ]
+to follow-links
+  crt 1[
+    set shape "circle"
+    set follower self
+    set color yellow
+    set size 3
   ]
-end
+  let temp 1
+  repeat n * 30[
+    ask follower[
 
-; Called by patches who need trays refilled
-to food-trays
-  set refill-timer refill-timer - 1
+      face turtle temp
+      fd .5
+      if one-of turtles-here = turtle (temp) [set temp temp + 1]
+    ]
 
-  if refill-timer = 0 [
-    set servings-left serving-count
-
-    if self = salad [set pcolor  64.9]
-    if self = pizza [set pcolor  44.9]
-    if self = meat  [set pcolor 125.7]
-    if self = pasta [set pcolor 116.9]
-
-    set refill-timer serving-count * 5
+    wait .05
   ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-232
+210
 10
-760
-669
+647
+448
 -1
 -1
 13.0
@@ -261,175 +58,100 @@ GRAPHICS-WINDOW
 0
 1
 0
-39
+32
 0
-49
+32
 0
 0
 1
-seconds
+ticks
 30.0
 
-BUTTON
-19
-30
-82
-63
-NIL
-setup
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-19
-71
-139
-104
-NIL
-spawn-student
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-19
-110
-82
-143
-NIL
-move
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 SLIDER
-19
-166
-191
-199
-p-student
-p-student
+16
+28
+188
+61
+n
+n
 0
-0.5
-0.369
-0.001
-1
-NIL
-HORIZONTAL
-
-SLIDER
-19
-204
-191
-237
-student-count
-student-count
-1
-200
-99.0
+100
+17.0
 1
 1
 NIL
 HORIZONTAL
 
-SLIDER
-19
-242
-191
-275
-min-patience
-min-patience
-11
-120
-120.0
-1
-1
+BUTTON
+27
+119
+90
+152
 NIL
-HORIZONTAL
-
-SLIDER
-19
-281
-191
-314
-max-patience
-max-patience
-120
-1200
-608.0
-1
-1
+setup\n
 NIL
-HORIZONTAL
-
-SWITCH
-20
-360
-161
-393
-food-shortage?
-food-shortage?
-0
 1
--1000
-
-SLIDER
-19
-398
-191
-431
-serving-count
-serving-count
-5
-50
-12.0
-1
-1
+T
+OBSERVER
 NIL
-HORIZONTAL
+NIL
+NIL
+NIL
+1
 
-PLOT
-7
-442
-224
-606
-plot 1
-seconds
-count students
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 0 -11221820 true "" "plot students-got-food-count"
-"pen-1" 1.0 0 -2674135 true "" "plot students-leaving-hungry-count"
+BUTTON
+35
+168
+127
+201
+NIL
+follow-links
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
-## TERM PROJECT - Ross Dining Hall simulation
-We have neither given nor received any unauthorized aid on this assignment.
--Kevin Hernandez, Felix Velez
+## WHAT IS IT?
+
+(a general understanding of what the model is trying to show or explain)
+
+## HOW IT WORKS
+
+(what rules the agents use to create the overall behavior of the model)
+
+## HOW TO USE IT
+
+(how to use the model, including a description of each of the items in the Interface tab)
+
+## THINGS TO NOTICE
+
+(suggested things for the user to notice while running the model)
+
+## THINGS TO TRY
+
+(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
+
+## EXTENDING THE MODEL
+
+(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
+
+## NETLOGO FEATURES
+
+(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
+
+## RELATED MODELS
+
+(models in the NetLogo Models Library and elsewhere which are of related interest)
+
+## CREDITS AND REFERENCES
+
+(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
 @#$#@#$#@
 default
 true
