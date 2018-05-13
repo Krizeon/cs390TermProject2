@@ -61,8 +61,13 @@ servers-own [
 to setup
   ca
   reset-ticks
+
   setup-patches
+  setup-links
   setup-servers
+
+  ask links [ set thickness 0.2 set color red ]
+
   set grab-food-time 10
   set students-got-food-count 0
   set students-leaving-hungry-count 0
@@ -101,6 +106,31 @@ to setup-patches
   set options-meat-station (patch-set pasta pizza (one-of patches with [is-exit?]))
   set options-pasta-station (patch-set pizza (one-of patches with [is-exit?]) )
   set options-salad-station (patch-set pizza meat (one-of patches with [is-exit?]))
+end
+
+; Create paths
+to setup-links
+  let done? false
+
+  while [not done?][
+   crt 1 [
+      set shape "circle"
+      set size 1
+      set color red
+     ifelse who = 0[
+        move-to one-of patches with [is-entrance?]
+        face meat
+      ][
+        move-to turtle (who - 1)
+        set heading ([heading] of turtle (who - 1))
+        if any? patches with [meat?] in-cone 2 10 [ face pasta ]
+        fd 2
+        create-link-with turtle (who - 1)
+      ]
+
+      if who > 20 [ set done? true ]
+    ]
+  ]
 end
 
 ; Creates the attendants for each station
@@ -439,7 +469,7 @@ max-patience
 max-patience
 120
 1200
-120.0
+1200.0
 1
 1
 NIL
