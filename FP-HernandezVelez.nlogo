@@ -17,6 +17,13 @@ globals [
   pizza
   pasta
 
+
+  ;Attendants that will go and refill trays when they are empty
+  meat-server
+  salad-server
+  pizza-server
+  pasta-server
+
   ;Will be sets of possible choices a student can make at each station
   options-entrance
   options-meat-station
@@ -26,6 +33,7 @@ globals [
 ]
 
 breed [ students student ]
+breed [ servers server ]
 
 patches-own [
   is-exit?         ; true for the red patches agents exit through.
@@ -41,23 +49,25 @@ patches-own [
 
 students-own [
   patience         ; amount of time a student will wait to get food
-;  food-choice-1
-;  food-choice-2
-;  got-food-1?
-;  got-food-2?
   grab-food-timer  ; a decreasing value as the student is getting food at a station
   target           ; student's destination patch based on optional choices at each station
+]
 
+servers-own [
+  home-patch
+  target
 ]
 
 to setup
   ca
   reset-ticks
   setup-patches
+  setup-servers
   set grab-food-time 10
   set students-got-food-count 0
   set students-leaving-hungry-count 0
 end
+
 
 ;Initialize patches
 to setup-patches
@@ -92,6 +102,48 @@ to setup-patches
   set options-pasta-station (patch-set pizza (one-of patches with [is-exit?]) )
   set options-salad-station (patch-set pizza meat (one-of patches with [is-exit?]))
 end
+
+; Creates the attendants for each station
+to setup-servers
+  create-servers 1 [
+    setxy 1 8
+    set pizza-server self
+    set home-patch patch 1 8
+    set target pizza
+    set shape "person"
+    set color brown
+    set size 2
+  ]
+  create-servers 1 [
+    setxy 4 43
+    set pasta-server self
+    set home-patch patch 4 43
+    set target pasta
+    set shape "person"
+    set color brown
+    set size 2
+  ]
+  create-servers 1 [
+    setxy 36 40
+    set meat-server self
+    set home-patch patch 36 40
+    set target meat
+    set shape "person"
+    set color brown
+    set size 2
+  ]
+  create-servers 1 [
+    setxy 37 4
+    set salad-server self
+    set home-patch patch 37 4
+    set target salad
+    set shape "person"
+    set color brown
+    set size 2
+  ]
+end
+
+
 
 ; Core function
 to move
@@ -143,7 +195,27 @@ to move
   ]
 
   ; If food-shortage is on, updates food left and refill times
-  if food-shortage? [ ask patches with [pcolor = brown] [food-trays] ]
+  if food-shortage? [
+
+    ; Servers move to refill food trys
+    ask servers [
+      ifelse [pcolor] of target = brown and not any? patches with [pcolor = brown] in-cone 3 10 [
+       face target
+       fd 0.2
+      ][
+        if [pcolor] of target != brown [
+          ifelse home-patch = patch-here [
+            setxy [pxcor] of home-patch [pycor] of home-patch
+          ][
+            face home-patch
+            fd 0.2
+          ]
+        ]
+      ]
+    ]
+
+    ask patches with [pcolor = brown] [food-trays]
+  ]
   wait 0.025
   tick
 end
@@ -219,7 +291,9 @@ end
 
 ; Called by patches who need trays refilled
 to food-trays
-  set refill-timer refill-timer - 1
+  if any? turtles with [color = brown] in-radius 3.5 [
+    set refill-timer refill-timer - 1
+  ]
 
   if refill-timer = 0 [
     set servings-left serving-count
@@ -232,7 +306,6 @@ to food-trays
     set refill-timer serving-count * 5
   ]
 end
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 232
@@ -321,7 +394,7 @@ p-student
 p-student
 0
 0.5
-0.369
+0.374
 0.001
 1
 NIL
@@ -392,7 +465,7 @@ serving-count
 serving-count
 5
 50
-12.0
+7.0
 1
 1
 NIL
