@@ -34,6 +34,7 @@ globals [
 
 breed [ students student ]
 breed [ servers server ]
+breed [ line-points line-point ]
 
 patches-own [
   is-exit?         ; true for the red patches agents exit through.
@@ -113,9 +114,9 @@ to setup-links
   let done? false
 
   while [not done?][
-   crt 1 [
+   create-line-points 1 [
       set shape "circle"
-      set size 1
+      set size 0.6
       set color red
      ifelse who = 0[
         move-to one-of patches with [is-entrance?]
@@ -177,7 +178,7 @@ end
 
 ; Core function
 to move
-  if random-float 1.0 < p-student and any? patches with [is-entrance? and not any? turtles-here][
+  if random-float 1.0 < p-student and any? patches with [is-entrance? and not any? students-here][
     spawn-student
   ]
 
@@ -185,7 +186,7 @@ to move
 
     ;turtles only move if there is not a station or another person in front of them
     ;    UNLESS they are heading towards the exit
-    ifelse (not any? other turtles in-cone 2 30 and (not any? patches with [meat? or pizza? or salad? or pasta? or is-wall?] in-cone 2 15))[
+    ifelse (not any? other students in-cone 2 30 and (not any? patches with [meat? or pizza? or salad? or pasta? or is-wall?] in-cone 2 15))[
       fd 0.5
     ][
       ifelse [is-exit?] of target [
@@ -302,18 +303,28 @@ to new-target
 end
 
 
-; Spawn 20 students in the dining hall with variables initialized randomly
+; Spawn one student at the entrance with variables initialized
 to spawn-student
   if count students < student-count [    ; at least for now, limit number of students that can be in the dining hall
     create-students 1 [
-      move-to one-of patches with [is-entrance? and not any? turtles-here]   ;spawn at the entrance
+      move-to one-of patches with [is-entrance? and not any? students-here]   ;spawn at the entrance
       set grab-food-timer grab-food-time
       set size 2
       set color (blue - 1 + random-float 4) ; set varied color for nice visualization
       set shape "person"
       set patience 60 ; randomly choose amount of time to wait until the student is fed up with waiting (between 1 minute and 15 minutes)
 
-      set target one-of options-entrance
+      let random-choice random-float 1
+      ifelse random-choice < 0.7 [
+        set target meat
+      ][
+        ifelse random-choice < 0.9 [
+         set target pizza
+        ][
+          set target salad
+        ]
+      ]
+      ;set target one-of options-entrance
       face target
     ]
   ]
@@ -424,7 +435,7 @@ p-student
 p-student
 0
 0.5
-0.374
+0.414
 0.001
 1
 NIL
@@ -454,7 +465,7 @@ min-patience
 min-patience
 11
 120
-50.0
+120.0
 1
 1
 NIL
@@ -495,7 +506,7 @@ serving-count
 serving-count
 5
 50
-7.0
+50.0
 1
 1
 NIL
