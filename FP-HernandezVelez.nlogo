@@ -15,16 +15,14 @@ globals [
   students-leaving-hungry-count  ; # of students who leave without getting a full meal
   p-omnivorous
 
-  pq-meat
-  pq-salad
-  pq-pizza
-
   ;easier to know which patch we're talking about
   meat
   salad
   pizza
   pasta
 
+  hour
+  ticks-per-second
 
   ;Attendants that will go and refill trays when they are empty
   meat-server
@@ -72,17 +70,35 @@ to setup
   reset-ticks
 
   setup-patches
-  setup-links
+  ;setup-links
   setup-servers
 
   ask links [ set thickness 0.2 set color red ]
 
+  set ticks-per-second 4
+  set hour 7
   set p-omnivorous (1 - p-vegetarians)
-  set grab-food-time 10
+  set grab-food-time 40
   set students-got-food-count 0
   set students-leaving-hungry-count 0
 end
 
+
+to set-time
+  let time ticks / ticks-per-second
+  let second floor (time) mod 60
+  let minute (floor (time / 60)) mod 60
+  if minute = 0 and second = 0 and ticks mod ticks-per-second = 0 [set hour hour + 1]
+  if hour = 13 [set hour 7]
+  if  minute < 10 [
+    set minute word "0" minute
+  ]
+  if second < 10 [
+    set second word "0" second
+  ]
+
+  ask patch 6 48 [set plabel-color black set plabel (word hour ":" minute ":" second)]
+end
 
 ;Initialize patches
 to setup-patches
@@ -129,16 +145,24 @@ to setup-links
       set color red
      ifelse who = 0[
         move-to one-of patches with [is-entrance?]
-        face meat
+        if not any? [points in-radius 2] of meat [face meat]
       ][
         move-to turtle (who - 1)
         set heading ([heading] of turtle (who - 1))
-        if any? patches with [meat?] in-cone 2 10 [ face pasta ]
-        fd 2
-        create-link-with turtle (who - 1)
+        if any? patches with [meat?] in-cone 2 10 [
+          ;face pasta
+          if any? [points in-radius 2] of meat [
+            set heading heading - 3
+          ]
+        ]
+          if any? [points in-radius 2] of meat [
+            set heading heading - 3.2
+          ]
+        fd 0.5
+        ask turtle (who - 1) [create-link-to myself]
       ]
 
-      if who > 20 [ set done? true ]
+      if who > 108 [ set done? true ]
     ]
   ]
 end
@@ -146,9 +170,9 @@ end
 ; Creates the attendants for each station
 to setup-servers
   create-servers 1 [
-    setxy 1 8
+    setxy 2 6
     set pizza-server self
-    set home-patch patch 1 8
+    set home-patch patch 2 6
     set target pizza
     set shape "person"
     set color brown
@@ -164,9 +188,9 @@ to setup-servers
     set size 2
   ]
   create-servers 1 [
-    setxy 36 40
+    setxy 35 40
     set meat-server self
-    set home-patch patch 36 40
+    set home-patch patch 35 40
     set target meat
     set shape "person"
     set color brown
@@ -184,6 +208,22 @@ to setup-servers
 end
 
 
+to follow-link
+  let temp 0
+  let temp-heading 0
+  if any? points-here[
+    ask points-here[
+      if any? out-link-neighbors [
+        face one-of out-link-neighbors
+        set temp distance one-of out-link-neighbors
+        set temp-heading heading
+      ]
+    ]
+    set heading temp-heading
+    fd temp
+  ]
+end
+
 
 ; Core function
 to move
@@ -193,10 +233,12 @@ to move
 
   ask students[
 
+
     ;turtles only move if there is not a station or another person in front of them
     ;    UNLESS they are heading towards the exit
     ifelse (not any? other students in-cone 2 30 and (not any? patches with [meat? or pizza? or salad? or pasta? or is-wall?] in-cone 2 15))[
       fd 0.5
+      ;ifelse target = meat or target = pasta [follow-link] [fd 0.5]
     ][
       ifelse [is-exit?] of target [
         fd .5
@@ -245,8 +287,9 @@ to move
 
     ask patches with [pcolor = brown] [food-trays]
   ]
-  wait 0.025
+  ;wait 0.025
   tick
+  set-time
 end
 
 
@@ -327,7 +370,7 @@ to spawn-student
       set size 2
       set color (blue - 1 + random-float 4) ; set varied color for nice visualization
       set shape "person"
-      set patience 60 ; randomly choose amount of time to wait until the student is fed up with waiting (between 1 minute and 15 minutes)
+      set patience (random max-patience) - min-patience ; randomly choose amount of time to wait until the student is fed up with waiting (between 1 minute and 15 minutes)
 
       let random-choice random-float 1
       ifelse random-choice < p-omnivorous[
@@ -371,7 +414,6 @@ end
 
 
 
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 274
@@ -382,7 +424,7 @@ GRAPHICS-WINDOW
 -1
 13.0
 1
-10
+16
 1
 1
 1
@@ -460,7 +502,7 @@ p-student
 p-student
 0
 0.5
-0.153
+0.035
 0.001
 1
 NIL
@@ -488,9 +530,9 @@ SLIDER
 275
 min-patience
 min-patience
-11
 180
-180.0
+360
+360.0
 1
 1
 NIL
@@ -503,9 +545,9 @@ SLIDER
 314
 max-patience
 max-patience
-180
-1200
-1200.0
+360
+2400
+2400.0
 1
 1
 NIL
@@ -542,8 +584,8 @@ PLOT
 482
 224
 646
-plot 1
-seconds
+students got food vs did not
+seconds / 4
 count students
 0.0
 10.0
@@ -565,7 +607,7 @@ p-vegetarians
 p-vegetarians
 0
 1
-0.15
+0.25
 0.01
 1
 NIL
