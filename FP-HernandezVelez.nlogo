@@ -137,7 +137,7 @@ to setup-patches
   set options-entrance (patch-set salad meat meat meat meat meat pizza)
   set options-meat-station (patch-set pasta pizza (one-of patches with [is-exit?]))
   set options-pasta-station (patch-set pizza (one-of patches with [is-exit?]) )
-  set options-salad-station (patch-set pizza meat (one-of patches with [is-exit?]))
+  set options-salad-station (patch-set pizza (one-of patches with [is-exit?]))
 
   setup-links
 end
@@ -160,7 +160,7 @@ to setup-servers
     set home-patch patch 2 6
     set target pizza
     set shape "person"
-    set color brown
+    set color green - 2
     set size 2
   ]
   ;server for pasta
@@ -170,7 +170,7 @@ to setup-servers
     set home-patch patch 4 43
     set target pasta
     set shape "person"
-    set color brown
+    set color green - 2
     set size 2
   ]
   ;server for meat
@@ -180,7 +180,7 @@ to setup-servers
     set home-patch patch 35 40
     set target meat
     set shape "person"
-    set color brown
+    set color green - 2
     set size 2
   ]
   ;server for salad
@@ -190,7 +190,7 @@ to setup-servers
     set home-patch patch 37 4
     set target salad
     set shape "person"
-    set color brown
+    set color green - 2
     set size 2
   ]
 end
@@ -352,10 +352,10 @@ to spawn-student
       ifelse random-choice < p-omnivorous[
         set target meat
       ][
-        ifelse random-choice < 0.9 [
-         set target pizza
+        ifelse random-choice < p-vegetarians [
+         set target salad
         ][
-          set target salad
+          set target pizza
         ]
       ]
       ;set target one-of options-entrance
@@ -366,7 +366,7 @@ end
 
 ; Called by patches who need trays refilled
 to food-trays
-  if any? turtles with [color = brown] in-radius 3.5 [
+  if any? turtles with [color = green - 2] in-radius 3.5 [
     set refill-timer refill-timer - 1
   ]
 
@@ -412,7 +412,6 @@ end
 
 
 
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 274
@@ -423,7 +422,7 @@ GRAPHICS-WINDOW
 -1
 13.0
 1
-16
+20
 1
 1
 1
@@ -501,7 +500,7 @@ p-student
 p-student
 0.005
 0.3
-0.02
+0.1284
 0.001
 1
 NIL
@@ -606,7 +605,7 @@ p-vegetarians
 p-vegetarians
 0
 1
-0.15
+1.0
 0.01
 1
 NIL
@@ -629,13 +628,41 @@ We have neither given nor received any unauthorized aid on this assignment.
 -Kevin Hernandez, Felix Velez
 
 
-Due to the slowness of students, we have changed one second to be equivalent to four ticks in this simulation.
+-Due to the slowness of students, we have changed one second to be equivalent to four ticks in this simulation.
 
-This program is meant to simulate traffick in Ross Dining hall. We are keeping track of the times when the dining halls get busy and how many students are getting full meals vs how many are leaving hungry.
+This program is meant to simulate traffic in Ross Dining hall. We are keeping track of the times when the dining halls get busy and how many students are getting full meals vs how many are leaving hungry.
 
-We attempted to recreate typical behavior in the dining halls with certain aspects simplified. For example, students cutting in line is fairly frequent, but we limited that heavily in our program. We are also only focused on the mornings and afternoon times since those are the times when when the majority of students would be busy with classes.
+We attempted to recreate typical behavior in the dining halls with certain aspects simplified. For example, students cutting in line is fairly frequent, but we limited that heavily in our program. We are also only focused on the mornings and early afternoon times since those are the times when when the majority of students would be busy with classes.
 
-We have students randomly choose stations to
+We have students randomly choose stations to go to at each point. From the entrance, they can choose to go to the meat station (most popular choice), the pizza station, or the salad station.
+
+### Overview of the interface
+
+When you click the setup button, right away there are many elements on screen. The dark green people standing on each corner of the world are the servers, who cook and refill the food trays when they are empty. There are four distinct food stations represented as single colored patches, as follows:
+
+-meat: represented by the magenta patch on the top right part of the world
+-pasta: represented by the lavender patch on the top left part of the world
+-salad: represented by the bright green patch on the bottom right part of the world
+-pizza: represented by the yellow patch on the bottom left part of the world
+
+Meat is only accessible by those that are not vegetarian. Pasta is only accessible to those who get meat, to simulate the natural line formations that exist in Ross.
+
+The slider labeled "p-students" is the probability of a student appearing in the dining hall. It can be played with, but it will automatically update itself based on the time of day in the simulation. It is recommended that the value is fairly low, around 0.15.
+
+The "student-count" slider limits the number of students that can exist at once in the simulation.
+
+The "min-patience" and "max-patience" sliders are used to set the lowest and highest possible wait times for students before they leave the dining hall hungry.
+
+"p-vegetarians" is the probability that a student is a vegetarian. If they are a vegetarian they, will not head to the meat (magenta) station and instead will head to the salad (green) station.
+
+
+
+### Agent Behavior
+
+Besides the green servers, the other agents in the simulation are all students. They come in from the entrance (blue patches) and choose which food station to go to. They will only move forward if there is not another student in front if them. If there is, then their patience timer decreases (unless they are right at the station waiting for the food tray to be refill). 
+
+The patience variable is a countdown that, when zero, the student, cannot wait any longer and leaves the dining hall without a full meal. When they leave due to impatience, they will turn red for visualization.
+
 @#$#@#$#@
 default
 true
