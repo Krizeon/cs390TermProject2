@@ -60,6 +60,7 @@ students-own [
   patience         ; amount of time a student will wait to get food
   grab-food-timer  ; a decreasing value as the student is getting food at a station
   target           ; student's destination patch based on optional choices at each station
+  d
 ]
 
 servers-own [
@@ -74,6 +75,7 @@ to setup
   setup-patches
   setup-links
   setup-servers
+  setup-priority-queues
 
   ask links [ set thickness 0.2 set color red ]
 
@@ -81,6 +83,13 @@ to setup
   set grab-food-time 10
   set students-got-food-count 0
   set students-leaving-hungry-count 0
+end
+
+
+to setup-priority-queues
+  set pq-meat new-pqueue [[ x y ] -> [d] of x < [d] of y]
+  set pq-salad new-pqueue [[ x y ] -> [d] of x < [d] of y]
+  set pq-pizza new-pqueue [[ x y ] -> [d] of x < [d] of y]
 end
 
 
@@ -190,9 +199,7 @@ to move
   if random-float 1.0 < p-student and any? patches with [is-entrance? and not any? students-here][
     spawn-student
   ]
-
   ask students[
-
     ;turtles only move if there is not a station or another person in front of them
     ;    UNLESS they are heading towards the exit
     ifelse (not any? other students in-cone 2 30 and (not any? patches with [meat? or pizza? or salad? or pasta? or is-wall?] in-cone 2 15))[
@@ -218,6 +225,15 @@ to move
         set students-leaving-hungry-count students-leaving-hungry-count + 1
       ][
         set students-got-food-count students-got-food-count + 1
+      ]
+      if target = meat[
+        set pq-meat remove self last pq-meat
+      ]
+      if target = salad[
+        set pq-salad remove self last pq-salad
+      ]
+      if target = pizza[
+         set pq-pizza remove self last pq-pizza
       ]
       die
     ]
@@ -296,25 +312,43 @@ end
 
 ; Has agents randomly choose a new target patch when they've gotten food at a station
 to new-target
+  if target = meat[
+    if not empty? pq-meat [set pq-meat delete-min pq-meat]
+  ]
+  if target = salad[
+      if not empty? pq-salad [set pq-salad delete-min pq-salad]
+  ]
+  if target = pizza[
+        if not empty? pq-pizza [set pq-pizza delete-min pq-pizza]
+  ]
 
-    ; Check which station they are by and randomly choose a possible decision from there
-    if any? patches in-cone 2 15 with [meat?] [
-      set target one-of options-meat-station
-      if target = pizza or [is-exit?] of target [ fd 1]
-      face target
-    ]
-    if any? patches in-cone 2 15 with [pasta?] [
-      set target one-of options-pasta-station
-      face target
-    ]
-    if any? patches in-cone 2 15 with [salad?] [
-      set target one-of options-salad-station
-      face target
-    ]
-    if any? patches in-cone 2 15 with [pizza?] [
-      set target one-of patches with [is-exit?]
-      face target
-    ]
+  ; Check which station they are by and randomly choose a possible decision from there
+  if any? patches in-cone 2 15 with [meat?] [
+    set target one-of options-meat-station
+    if target = pizza or [is-exit?] of target [ fd 1]
+    face target
+  ]
+  if any? patches in-cone 2 15 with [pasta?] [
+    set target one-of options-pasta-station
+    face target
+  ]
+  if any? patches in-cone 2 15 with [salad?] [
+    set target one-of options-salad-station
+    face target
+  ]
+  if any? patches in-cone 2 15 with [pizza?] [
+    set target one-of patches with [is-exit?]
+    face target
+  ]
+  if target = meat[
+    if not empty? pq-meat [face last last pq-meat]
+  ]
+  if target = salad[
+    if not empty? pq-salad [face last last pq-salad]
+  ]
+  if target = pizza[
+    if not empty? pq-pizza [face last last pq-pizza]
+  ]
 end
 
 
@@ -341,6 +375,18 @@ to spawn-student
       ]
       ;set target one-of options-entrance
       face target
+      if target = meat[
+        set d distance target
+        set pq-meat (insert pq-meat self)
+        if not empty? pq-meat [ face last last pq-meat ]
+      ]
+      if target = salad[
+        set pq-salad (insert pq-salad self)
+      ]
+      if target = pizza[
+        set pq-pizza (insert pq-pizza self)
+      ]
+
     ]
   ]
 end
@@ -460,7 +506,7 @@ p-student
 p-student
 0
 0.5
-0.153
+0.194
 0.001
 1
 NIL
