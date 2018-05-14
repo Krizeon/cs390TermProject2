@@ -73,7 +73,7 @@ to setup
   setup-servers
 
   set ticks-per-second 4 ; the amount of ticks per second
-  set hour 7                            ; initialize the hour to 7am
+  set hour 11                           ; initialize the hour to 7am
   set p-omnivorous (1 - p-vegetarians) ;inverse of p-vegetarians
   set grab-food-time 36 ; the amount of *ticks* it takes to grab food at a given station
   set students-got-food-count 0 ; the count of students that got food before leaving
@@ -279,6 +279,8 @@ end
 
 
 ; Agents need a few seconds to grab their food!
+; when they get food, search for another target
+; serving count is also decreased for a stations
 to get-food
   if [pcolor] of target != brown[
     set grab-food-timer grab-food-timer - 1
@@ -307,8 +309,7 @@ end
 
 ; Has agents randomly choose a new target patch when they've gotten food at a station
 to new-target
-
-    ; Check which station they are by and randomly choose a possible decision from there
+    ; Check which station they are by and randomly choose a new destination from there
     if any? patches in-cone 2 15 with [meat?] [
       set target one-of options-meat-station
       if target = pizza or [is-exit?] of target [ fd 1]
@@ -340,6 +341,7 @@ to spawn-student
       set shape "person"
       set patience (random max-patience) - min-patience ; randomly choose amount of time to wait until the student is fed up with waiting (between 1 minute and 15 minutes)
 
+      ; randomly choose a destination at the entrance
       let random-choice random-float 1
       ifelse random-choice < p-omnivorous[
         set target meat
@@ -356,15 +358,20 @@ to spawn-student
   ]
 end
 
-; Called by patches who need trays refilled
+
+; Called by patches who need their tray refilled
 to food-trays
+
+  ; Only begin refilling when the server is nearby
   if any? turtles with [color = green - 2] in-radius 3.5 [
     set refill-timer refill-timer - 1
   ]
 
+  ; When countdown finished, reset servings-left
   if refill-timer = 0 [
     set servings-left serving-count
 
+    ;revert back to original color
     if self = salad [set pcolor  64.9]
     if self = pizza [set pcolor  44.9]
     if self = meat  [set pcolor 125.7]
@@ -394,7 +401,6 @@ to top-of-the-hour-influx
       if hour = 12 and minute >= 15[
         set p-student precision (p-student - 0.0001) 5
       ]
-      ;set p-student abs p-student ;in case p-student ever goes negative, make sure it's positive
     ]
   ]
 end
@@ -491,7 +497,7 @@ p-student
 p-student
 0.005
 0.3
-0.1936
+0.009
 0.001
 1
 NIL
@@ -543,10 +549,10 @@ NIL
 HORIZONTAL
 
 SWITCH
-21
-375
-162
-408
+20
+417
+161
+450
 food-shortage?
 food-shortage?
 0
@@ -554,10 +560,10 @@ food-shortage?
 -1000
 
 SLIDER
-20
-413
-192
-446
+19
+359
+191
+392
 serving-count
 serving-count
 5
@@ -574,8 +580,8 @@ PLOT
 1252
 288
 students got food vs did not
-ticks / ticks-per-second
-count students
+ticks
+students
 0.0
 10.0
 0.0
@@ -596,17 +602,17 @@ p-vegetarians
 p-vegetarians
 0
 1
-1.0
+0.36
 0.01
 1
 NIL
 HORIZONTAL
 
 SWITCH
-19
-452
-163
-485
+21
+456
+165
+489
 influx-students?
 influx-students?
 0
