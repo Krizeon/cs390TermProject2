@@ -19,6 +19,8 @@ globals [
   pizza
   pasta
 
+
+  ; Used for calculating the current time of day
   hour
   minute
   second
@@ -51,7 +53,7 @@ patches-own [
   salad?           ; true if salad station
   pasta?           ; true if pasta station
   servings-left    ; countdown until a station needs to refill its tray of food
-  refill-timer ; countdown before a tray is refilled with food
+  refill-timer     ; countdown before a tray is refilled with food
 ]
 
 students-own [
@@ -61,8 +63,8 @@ students-own [
 ]
 
 servers-own [
-  home-patch
-  target
+  home-patch  ; patch where servers are idle
+  target      ; station where they will refill food
 ]
 
 to setup
@@ -70,13 +72,10 @@ to setup
   reset-ticks
 
   setup-patches
-  ;setup-links
   setup-servers
 
-  ask links [ set thickness 0.2 set color red ]
-
   set ticks-per-second 4
-  set hour 7
+  set hour 7                            ; initialize the hour to 7am
   set p-omnivorous (1 - p-vegetarians)
   set grab-food-time 36
   set students-got-food-count 0
@@ -84,6 +83,8 @@ to setup
 end
 
 
+; Is asked every tick to set the current time.
+;    -Resets to 7am when it reaches 1pm
 to set-time
   let time ticks / ticks-per-second
   set second floor (time) mod 60
@@ -139,41 +140,10 @@ to setup-patches
   set options-salad-station (patch-set pizza meat (one-of patches with [is-exit?]))
 end
 
-; Create paths
-to setup-links
-  let done? false
-
-  while [not done?][
-   create-points 1 [
-      set shape "circle"
-      set size 0.6
-      set color red
-     ifelse who = 0[
-        move-to one-of patches with [is-entrance?]
-        if not any? [points in-radius 2] of meat [face meat]
-      ][
-        move-to turtle (who - 1)
-        set heading ([heading] of turtle (who - 1))
-        if any? patches with [meat?] in-cone 2 10 [
-          ;face pasta
-          if any? [points in-radius 2] of meat [
-            set heading heading - 3
-          ]
-        ]
-          if any? [points in-radius 2] of meat [
-            set heading heading - 3.2
-          ]
-        fd 0.5
-        ask turtle (who - 1) [create-link-to myself]
-      ]
-
-      if who > 108 [ set done? true ]
-    ]
-  ]
-end
 
 ; Creates the attendants for each station
 to setup-servers
+  ;server for pizza
   create-servers 1 [
     setxy 2 6
     set pizza-server self
@@ -183,6 +153,7 @@ to setup-servers
     set color brown
     set size 2
   ]
+  ;server for pasta
   create-servers 1 [
     setxy 4 43
     set pasta-server self
@@ -192,6 +163,7 @@ to setup-servers
     set color brown
     set size 2
   ]
+  ;server for meat
   create-servers 1 [
     setxy 35 40
     set meat-server self
@@ -201,6 +173,7 @@ to setup-servers
     set color brown
     set size 2
   ]
+  ;server for salad
   create-servers 1 [
     setxy 37 4
     set salad-server self
@@ -209,23 +182,6 @@ to setup-servers
     set shape "person"
     set color brown
     set size 2
-  ]
-end
-
-
-to follow-link
-  let temp 0
-  let temp-heading 0
-  if any? points-here[
-    ask points-here[
-      if any? out-link-neighbors [
-        face one-of out-link-neighbors
-        set temp distance one-of out-link-neighbors
-        set temp-heading heading
-      ]
-    ]
-    set heading temp-heading
-    fd temp
   ]
 end
 
@@ -446,7 +402,6 @@ end
 
 
 
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 274
@@ -535,7 +490,7 @@ p-student
 p-student
 0.005
 0.3
-0.19660000000003225
+-0.029799999999989373
 0.001
 1
 NIL
@@ -664,6 +619,12 @@ We have neither given nor received any unauthorized aid on this assignment.
 
 
 Due to the slowness of students, we have changed one second to be equivalent to four ticks in this simulation.
+
+This program is meant to simulate traffick in Ross Dining hall. We are keeping track of the times when the dining halls get busy and how many students are getting full meals vs how many are leaving hungry.
+
+We attempted to recreate typical behavior in the dining halls with certain aspects simplified. For example, students cutting in line is fairly frequent, but we limited that heavily in our program. We are also only focused on the mornings and afternoon times since those are the times when when the majority of students would be busy with classes.
+
+We have students randomly choose stations to
 @#$#@#$#@
 default
 true
@@ -970,7 +931,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.0.2
+NetLogo 6.0.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
