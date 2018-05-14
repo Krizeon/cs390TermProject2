@@ -138,6 +138,16 @@ to setup-patches
   set options-meat-station (patch-set pasta pizza (one-of patches with [is-exit?]))
   set options-pasta-station (patch-set pizza (one-of patches with [is-exit?]) )
   set options-salad-station (patch-set pizza meat (one-of patches with [is-exit?]))
+
+  setup-links
+end
+
+to show-paths
+  ask links [ set hidden? false ]
+end
+
+to setup-links
+  ask patch 23 0 [  ]
 end
 
 
@@ -396,6 +406,7 @@ to top-of-the-hour-influx
     ]
   ]
 end
+
 
 
 
