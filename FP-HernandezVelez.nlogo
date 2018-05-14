@@ -20,6 +20,8 @@ globals [
   pasta
 
   hour
+  minute
+  second
   ticks-per-second
 
   ;Attendants that will go and refill trays when they are empty
@@ -76,7 +78,7 @@ to setup
   set ticks-per-second 4
   set hour 7
   set p-omnivorous (1 - p-vegetarians)
-  set grab-food-time 40
+  set grab-food-time 36
   set students-got-food-count 0
   set students-leaving-hungry-count 0
 end
@@ -84,18 +86,23 @@ end
 
 to set-time
   let time ticks / ticks-per-second
-  let second floor (time) mod 60
-  let minute (floor (time / 60)) mod 60
+  set second floor (time) mod 60
+  set minute (floor (time / 60)) mod 60
   if minute = 0 and second = 0 and ticks mod ticks-per-second = 0 [set hour hour + 1]
-  if hour = 13 [set hour 7]
-  if  minute < 10 [
-    set minute word "0" minute
+
+  ; we want minutes and seconds to stay as ints, so use temp versions for this procedure
+  let temp-minute minute
+  let temp-second second
+
+  if hour = 13 [set hour 7] ;loop back to the morning
+  if  temp-minute < 10 [
+    set temp-minute word "0" temp-minute
   ]
-  if second < 10 [
-    set second word "0" second
+  if temp-second < 10 [
+    set temp-second word "0" temp-second
   ]
 
-  ask patch 6 48 [set plabel-color black set plabel (word hour ":" minute ":" second)]
+  ask patch 6 48 [set plabel-color black set plabel (word hour ":" temp-minute ":" temp-second)]
 end
 
 ;Initialize patches
@@ -110,7 +117,7 @@ to setup-patches
     set meat? false
     set pasta? false
     set servings-left serving-count
-    set refill-timer serving-count * 5
+    set refill-timer serving-count * 4
   ]
   ; Import a picture of a simple layout of Ross food stations
   import-pcolors "ross-pixelated.png"
@@ -231,7 +238,6 @@ to move
 
   ask students[
 
-
     ;turtles only move if there is not a station or another person in front of them
     ;    UNLESS they are heading towards the exit
     ifelse (not any? other students in-cone 2 30 and (not any? patches with [meat? or pizza? or salad? or pasta? or is-wall?] in-cone 2 15))[
@@ -244,7 +250,6 @@ to move
         update-patience
       ]
     ]
-
 
     ; Checks if an agent has reached a station and has it grab food
     if any? patches with [meat? or pizza? or pasta? or salad?] in-radius 2[
@@ -263,31 +268,13 @@ to move
     ]
   ]
 
-  ; If food-shortage is on, updates food left and refill times
-  if food-shortage? [
+  ; update food and refill trays if food-shortage? is on
+  refill-trays?
 
-    ; Servers move to refill food trys
-    ask servers [
-      ifelse [pcolor] of target = brown and not any? patches with [pcolor = brown] in-cone 3 10 [
-       face target
-       fd 0.2
-      ][
-        if [pcolor] of target != brown [
-          ifelse home-patch = patch-here [
-            setxy [pxcor] of home-patch [pycor] of home-patch
-          ][
-            face home-patch
-            fd 0.2
-          ]
-        ]
-      ]
-    ]
-
-    ask patches with [pcolor = brown] [food-trays]
-  ]
   ;wait 0.025
   tick
   set-time
+  top-of-the-hour-influx
 end
 
 
@@ -304,6 +291,31 @@ to update-patience
     set target one-of patches with [is-exit?]
     face target
     set color red
+  ]
+end
+
+
+; If food-shortage is on, updates food left and refill times
+to refill-trays?
+  if food-shortage? [
+
+    ; Servers move to refill food trys
+    ask servers [
+      ifelse [pcolor] of target = brown and not any? patches with [pcolor = brown] in-cone 3 10 [
+        face target
+        fd 0.25
+      ][
+        if [pcolor] of target != brown [ ; if the tray is empty, refill it!
+          ifelse home-patch = patch-here [
+            setxy [pxcor] of home-patch [pycor] of home-patch
+          ][
+            face home-patch
+            fd 0.25
+          ]
+        ]
+      ]
+    ]
+    ask patches with [pcolor = brown] [food-trays]
   ]
 end
 
@@ -405,6 +417,30 @@ to food-trays
 end
 
 
+; dynamically increase the number of students entering the dining hall depending on the time
+; as we know most students have class at roughly the top of every hour
+; works best if p-student < 0.03
+; NOTE: only works for one day cycle (for now)
+to top-of-the-hour-influx
+  if influx-students?[
+    if ticks mod 4 = 0[
+      if minute >= 45 [
+        set p-student p-student + 0.0002 ; slowly increase the probability of students entering for the next 15 minutes
+      ]
+      if minute < 5 and hour != 7 [ ; dont decrease p-student at the beginning of the simulation
+        set p-student p-student - 0.0006 ; rapidly decrease the number of students entering (back to original p-students)
+      ]
+      if hour = 12 and minute < 15[
+        set p-student p-student + 0.0003
+      ]
+      if hour = 12 and minute >= 15[
+        set p-student p-student - 0.0001
+      ]
+    ]
+  ]
+end
+
+
 
 
 
@@ -497,9 +533,9 @@ SLIDER
 199
 p-student
 p-student
-0
-0.5
-0.0
+0.005
+0.3
+0.19660000000003225
 0.001
 1
 NIL
@@ -514,7 +550,7 @@ student-count
 student-count
 1
 200
-0.0
+152.0
 1
 1
 NIL
@@ -529,7 +565,7 @@ min-patience
 min-patience
 180
 360
-0.0
+360.0
 1
 1
 NIL
@@ -544,7 +580,7 @@ max-patience
 max-patience
 360
 2400
-0.0
+1958.0
 1
 1
 NIL
@@ -570,7 +606,7 @@ serving-count
 serving-count
 5
 50
-0.0
+25.0
 1
 1
 NIL
@@ -604,16 +640,30 @@ p-vegetarians
 p-vegetarians
 0
 1
-0.0
+0.15
 0.01
 1
 NIL
 HORIZONTAL
 
+SWITCH
+99
+113
+243
+146
+influx-students?
+influx-students?
+0
+1
+-1000
+
 @#$#@#$#@
 ## TERM PROJECT - Ross Dining Hall simulation
 We have neither given nor received any unauthorized aid on this assignment.
 -Kevin Hernandez, Felix Velez
+
+
+Due to the slowness of students, we have changed one second to be equivalent to four ticks in this simulation.
 @#$#@#$#@
 default
 true
