@@ -1,0 +1,179 @@
+; Matthew Dickerson
+; Demo for CSCI 390
+
+; This is a generic priority queue implemented using a standard min-heap --
+; a full heap-ordered binary tree.
+;   In order be generic and accept any data type and "<" comparison, it
+; makes use of an anonymous reporter (sometimes called a first-order function).
+;   * The heap is a 2D list (array). 
+;   * The first element of the list is the less-than? comparison anonymous reporter
+;   * The second element of the list is a nested list storing the full heap-ordered 
+;     binary tree in the standard way, with the root at index 0 and the left and right 
+;     children of node i at positions 2i+1 and 2i+2.
+;
+; NOTE: The main disadvantages of using a 2D list rather than an agent with two instance variables
+; is that NetLogo passes parameters by value, and thus if a list is changed only the local copy stored
+; in the variable of the actual parameter is changed. The updated list needs to be reported.
+; For this reason, we need to break delete-min into two reporters report-min and delete-min.
+;    report-min reports the minimum value in the priority queue with deleting it.
+;    delete-min delets the minimum value in the priority queue and reports the updated queue.
+
+to test-listheap 
+  let pq1 new-pqueue [[ x y ] -> x < y] 
+  repeat 10 [ set pq1 insert pq1 (random 100)]   
+  show pq1
+  while [not is-empty? pq1][
+    show report-min pq1
+    set pq1 delete-min pq1
+  ]
+  
+  let pq2 new-pqueue [[ p1 p2 ] -> [pxcor] of p1 < [pxcor] of p2 ] 
+  ask n-of 10 patches [ set pq2 insert pq2 self]   
+  while [not is-empty? pq2][
+    show report-min pq2
+    set pq2 delete-min pq2
+  ]
+end
+
+
+; --- EXTERNAL OBSERVER-CONTEXT PROCEDURES WORKING ON THE ENTIRE HEAP ---
+; These procedures form the interface: the procedures called by
+; users of this heap. 
+; They are all OBSERVER context, but may also be called by AGENTS and PATCHES
+
+; Create and report a new empty heap priority queue
+; less-than?  is the anonymous reporter description the "<" operator which defines the min-heap
+to-report new-pqueue [ less-than? ]
+  report (list less-than? [])
+end
+
+; Report the frontmost item in priority queue pq withotu changing pq
+; It assumes that pq is not empty.  The is-empty? reporter should be called before calling report-min
+to-report report-min [pq]
+  report first (last pq)        ; the second (last) element of pq is the heap. The first element of the heap is the front of pq.
+end
+
+; Delete and frontmost item in priority queue pq and report the resulting pq
+; It assumes that pq is not empty.  The is-empty? reporter should be called before calling report-min
+to-report delete-min [ pq ]
+  let less-than? first pq               ; the comparison operator of the pq
+  let data last pq                      ; the actual heap
+  ; -- the following four lines could be condensed to a single report command, but it would be more confusing -- 
+  set data (replace-item 0 data (last data))   ; move the final element to the front...
+  set data (but-last data)                     ; ...and delete it.  The list is now a full tree, but no longer heap ordered
+  set data (sink-down data 0 less-than?)       ; so make it heap ordered again.
+  report (list less-than? data)
+end
+
+; Insert value x to the priority queue pq and report the new queue
+; This procedure could be compressed to a single line:  report (list (first pq)  bubble-up (lput x last pq) (length last pq - 1) (first pq)
+to-report insert [pq x]
+  let less-than? first pq               ; the comparison operator of the pq
+  let data last pq                      ; the actual heap
+  set data lput x data                  ; put the new item at the end of the list to form a full binary tree and then...
+  set data bubble-up data (length data - 1) less-than?   ; ... bubble it up to restore heap order
+  report (list less-than? data)
+end
+
+; report true if priority queue pq is empty -- i.e. if data is empty
+to-report is-empty? [pq]
+  report length last pq = 0
+end
+
+
+; --   INTERNAL PROCEDURES WORKING ON DATA LIST --
+; These are also OBSERVER context, but should only be called from other procedures and reporters in this .NLS file.
+; In Java, we would want to call these "private".
+
+; These work on the data list of the heap, inserting and deleting using the comparison operator;
+; For efficiency, and also as a contrast to the agent-based approach, but bubble-up and sink-down are implemented 
+; iterative rather than recursively.
+
+
+; Reestablish the heap-ordered of the heap stored in list data, but letting the value at index i
+; fall down toward the bottom of the tree (the leaf nodes) until both its children are larger.
+; This assumes data is a well-ordered heap in both the left and subtree, and that the ancestors of index i
+; are also heap-ordered. item i might be out of order.
+to-report sink-down [ data i less-than? ]
+  let done? false            ; indicates when i has reached a leaf node, or both its children are larger
+  
+  while [not done?][
+    let l lchild i             ; get indices to the children of i
+    let r rchild i
+    
+    ; check if i is not a leaf (it has a lchild)
+    ifelse l >= length data [
+      set done? true           ; i is a leaf, and so we don't need to continue
+    ][
+      ; check if i has a right child
+      ; if i has both rchild and lchild, compare i with the smaller of them
+      ifelse r < length data [
+        ifelse (runresult less-than? (item l data) (item r data)) [
+          ifelse (runresult less-than? (item l data) (item i data)) [
+            set data (swap data i l)
+            set i l
+          ][
+            set done? true     ; i is smaller than its smallest child and so we are done
+          ]
+        ][
+          ifelse (runresult less-than? (item r data) (item i data)) [
+            set data swap data i r
+            set i r
+          ][
+            set done? true    ; i is smaller than its smallest child and so we are done
+          ]
+        ]
+      ][ ; if i has a lchild but no rchild, we only need to check if i needs to swap with lchild
+        ifelse (runresult less-than? (item l data) (item i data)) [
+          set data (swap data i l)
+          set i l
+        ][
+          set done? true     ; i is smaller than its smallest child and so we are done
+        ]
+      ]
+    ]
+  ]
+  report data
+end
+
+; (This is the inverse of sink-down)
+; Assume that data is a well-ordered heap above item i. Keep moving the value at i up the tree, swapping with its parent,
+; until it is in the right place.
+; Implemented iterative.
+to-report bubble-up [ data i less-than? ]
+  let done? false
+  while [i > 0 and not done?][
+    let p parent i
+    ifelse (runresult less-than? (item i data) (item p data)) [
+      set data (swap data i p)
+      set i p
+    ][
+      set done? true
+    ]
+  ]
+  report data
+end
+
+;; ===== LOWER LEVEL PROCEDURES ====
+
+; HEAP CONTEXT
+; Swap items i and j in the list data and report the resulting list
+to-report swap [ data i j ]
+  let temp item i data
+  set data replace-item i data (item j data)
+  set data replace-item j data temp
+  report data
+end
+
+; Report indices of left child, right child, and parent of i
+to-report lchild [ i ]
+  report 2 * i + 1
+end
+
+to-report rchild [ i ]
+  report 2 * i + 2
+end
+
+to-report parent [ i ]
+  report int ((i - 1) / 2)
+end

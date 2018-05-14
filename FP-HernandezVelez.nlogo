@@ -4,12 +4,20 @@
 ; 5/4/2018
 ; TERM PROJECT - Ross Dining Hall simulation
 
+
+__includes ["heap2.nls"]
+
 globals [
   preference-list                ; a list of the possible food preferences to be chosen at random
   patience-list                  ; more specific variations for student patience
   grab-food-time                 ; time it takes to get a plate of food when at a station
   students-got-food-count        ; # of students that have gotten food
   students-leaving-hungry-count  ; # of students who leave without getting a full meal
+  p-omnivorous
+
+  pq-meat
+  pq-salad
+  pq-pizza
 
   ;easier to know which patch we're talking about
   meat
@@ -34,7 +42,7 @@ globals [
 
 breed [ students student ]
 breed [ servers server ]
-breed [ line-points line-point ]
+breed [ points point ]
 
 patches-own [
   is-exit?         ; true for the red patches agents exit through.
@@ -69,6 +77,7 @@ to setup
 
   ask links [ set thickness 0.2 set color red ]
 
+  set p-omnivorous (1 - p-vegetarians)
   set grab-food-time 10
   set students-got-food-count 0
   set students-leaving-hungry-count 0
@@ -114,7 +123,7 @@ to setup-links
   let done? false
 
   while [not done?][
-   create-line-points 1 [
+   create-points 1 [
       set shape "circle"
       set size 0.6
       set color red
@@ -192,18 +201,7 @@ to move
       ifelse [is-exit?] of target [
         fd .5
       ][
-        ; this statement implies the student is not moving, so decrease their patience timer
-        if not any? patches in-radius 3 with [meat? or salad? or pasta? or pizza?] [ ;only decrease patience timer if not getting food
-          set patience patience - 1
-        ]
-
-        ; if student reaches its patience limit, then just go to the exit and leave angrily!
-        ; student color becomes red for visualization
-        if patience = 0[
-          set target one-of patches with [is-exit?]
-          face target
-          set color red
-        ]
+        update-patience
       ]
     ]
 
@@ -249,6 +247,23 @@ to move
   ]
   wait 0.025
   tick
+end
+
+
+;updates a student's patience timer
+to update-patience
+  ; this statement implies the student is not moving, so decrease their patience timer
+  if not any? patches in-radius 3 with [meat? or salad? or pasta? or pizza?] [ ;only decrease patience timer if not getting food
+    set patience patience - 1
+  ]
+
+  ; if student reaches its patience limit, then just go to the exit and leave angrily!
+  ; student color becomes red for visualization
+  if patience = 0[
+    set target one-of patches with [is-exit?]
+    face target
+    set color red
+  ]
 end
 
 
@@ -315,7 +330,7 @@ to spawn-student
       set patience 60 ; randomly choose amount of time to wait until the student is fed up with waiting (between 1 minute and 15 minutes)
 
       let random-choice random-float 1
-      ifelse random-choice < 0.7 [
+      ifelse random-choice < p-omnivorous[
         set target meat
       ][
         ifelse random-choice < 0.9 [
@@ -344,14 +359,24 @@ to food-trays
     if self = meat  [set pcolor 125.7]
     if self = pasta [set pcolor 116.9]
 
-    set refill-timer serving-count * 5
+    set refill-timer serving-count * 3
   ]
 end
+
+
+
+
+
+
+
+
+
+
 @#$#@#$#@
 GRAPHICS-WINDOW
-232
+274
 10
-760
+802
 669
 -1
 -1
@@ -435,7 +460,7 @@ p-student
 p-student
 0
 0.5
-0.414
+0.153
 0.001
 1
 NIL
@@ -464,8 +489,8 @@ SLIDER
 min-patience
 min-patience
 11
-120
-120.0
+180
+180.0
 1
 1
 NIL
@@ -478,7 +503,7 @@ SLIDER
 314
 max-patience
 max-patience
-120
+180
 1200
 1200.0
 1
@@ -488,9 +513,9 @@ HORIZONTAL
 
 SWITCH
 20
-360
+400
 161
-393
+433
 food-shortage?
 food-shortage?
 0
@@ -499,14 +524,14 @@ food-shortage?
 
 SLIDER
 19
-398
+438
 191
-431
+471
 serving-count
 serving-count
 5
 50
-50.0
+25.0
 1
 1
 NIL
@@ -514,9 +539,9 @@ HORIZONTAL
 
 PLOT
 7
-442
+482
 224
-606
+646
 plot 1
 seconds
 count students
@@ -530,6 +555,21 @@ false
 PENS
 "default" 1.0 0 -11221820 true "" "plot students-got-food-count"
 "pen-1" 1.0 0 -2674135 true "" "plot students-leaving-hungry-count"
+
+SLIDER
+18
+345
+190
+378
+p-vegetarians
+p-vegetarians
+0
+1
+0.15
+0.01
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## TERM PROJECT - Ross Dining Hall simulation
@@ -841,7 +881,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.0.1
+NetLogo 6.0.2
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
