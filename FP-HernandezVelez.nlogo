@@ -4,18 +4,32 @@
 ; 5/4/2018
 ; TERM PROJECT - Ross Dining Hall simulation
 
+
 globals [
   preference-list                ; a list of the possible food preferences to be chosen at random
   patience-list                  ; more specific variations for student patience
   grab-food-time                 ; time it takes to get a plate of food when at a station
   students-got-food-count        ; # of students that have gotten food
   students-leaving-hungry-count  ; # of students who leave without getting a full meal
+  p-omnivorous
 
   ;easier to know which patch we're talking about
   meat
   salad
   pizza
   pasta
+
+  ; Used for calculating the current time of day (relative to the simulation)
+  hour ; current hour
+  minute ; current minute
+  second ; current second
+  ticks-per-second
+
+  ;Attendants that will go and refill trays when they are empty
+  meat-server
+  salad-server
+  pizza-server
+  pasta-server
 
   ;Will be sets of possible choices a student can make at each station
   options-entrance
@@ -26,6 +40,8 @@ globals [
 ]
 
 breed [ students student ]
+breed [ servers server ]
+breed [ points point ]
 
 patches-own [
   is-exit?         ; true for the red patches agents exit through.
@@ -36,30 +52,61 @@ patches-own [
   salad?           ; true if salad station
   pasta?           ; true if pasta station
   servings-left    ; countdown until a station needs to refill its tray of food
-  refill-timer ; countdown before a tray is refilled with food
+  refill-timer     ; countdown before a tray is refilled with food
 ]
 
 students-own [
   patience         ; amount of time a student will wait to get food
-;  food-choice-1
-;  food-choice-2
-;  got-food-1?
-;  got-food-2?
   grab-food-timer  ; a decreasing value as the student is getting food at a station
   target           ; student's destination patch based on optional choices at each station
+]
 
+servers-own [
+  home-patch  ; patch where servers are idle
+  target      ; station where they will refill food
 ]
 
 to setup
   ca
   reset-ticks
+
   setup-patches
-  set grab-food-time 10
+  setup-servers
+
+  set ticks-per-second 4
+  set hour 7                            ; initialize the hour to 7am
+  set p-omnivorous (1 - p-vegetarians)
+  set grab-food-time 36
   set students-got-food-count 0
   set students-leaving-hungry-count 0
 end
 
-;Initialize patches
+
+; Is asked every tick to set the current time.
+;    -Resets to 7am when it reaches 1pm
+to set-time
+  let time ticks / ticks-per-second
+  set second floor (time) mod 60
+  set minute (floor (time / 60)) mod 60
+  if minute = 0 and second = 0 and ticks mod ticks-per-second = 0 [set hour hour + 1]
+
+  ; we want minutes and seconds to stay as ints, so use temp versions for this procedure
+  let temp-minute minute
+  let temp-second second
+
+  if hour = 13 [set hour 7] ;loop back to the morning
+  if  temp-minute < 10 [
+    set temp-minute word "0" temp-minute
+  ]
+  if temp-second < 10 [
+    set temp-second word "0" temp-second
+  ]
+
+  ask patch 6 48 [set plabel-color black set plabel (word hour ":" temp-minute ":" temp-second)]
+end
+
+
+;Initialize patches' instance variables
 to setup-patches
   ; Initialize all necessary variables first
   ask patches[
@@ -71,7 +118,7 @@ to setup-patches
     set meat? false
     set pasta? false
     set servings-left serving-count
-    set refill-timer serving-count * 5
+    set refill-timer serving-count * 4
   ]
   ; Import a picture of a simple layout of Ross food stations
   import-pcolors "ross-pixelated.png"
@@ -103,9 +150,55 @@ to setup-links
   ask patch 23 0 [  ]
 end
 
+
+; Creates the attendants for each station
+to setup-servers
+  ;server for pizza
+  create-servers 1 [
+    setxy 2 6
+    set pizza-server self
+    set home-patch patch 2 6
+    set target pizza
+    set shape "person"
+    set color brown
+    set size 2
+  ]
+  ;server for pasta
+  create-servers 1 [
+    setxy 4 43
+    set pasta-server self
+    set home-patch patch 4 43
+    set target pasta
+    set shape "person"
+    set color brown
+    set size 2
+  ]
+  ;server for meat
+  create-servers 1 [
+    setxy 35 40
+    set meat-server self
+    set home-patch patch 35 40
+    set target meat
+    set shape "person"
+    set color brown
+    set size 2
+  ]
+  ;server for salad
+  create-servers 1 [
+    setxy 37 4
+    set salad-server self
+    set home-patch patch 37 4
+    set target salad
+    set shape "person"
+    set color brown
+    set size 2
+  ]
+end
+
+
 ; Core function
 to move
-  if random-float 1.0 < p-student and any? patches with [is-entrance? and not any? turtles-here][
+  if random-float 1.0 < p-student and any? patches with [is-entrance? and not any? students-here][
     spawn-student
   ]
 
@@ -113,27 +206,16 @@ to move
 
     ;turtles only move if there is not a station or another person in front of them
     ;    UNLESS they are heading towards the exit
-    ifelse (not any? other turtles in-cone 2 30 and (not any? patches with [meat? or pizza? or salad? or pasta? or is-wall?] in-cone 2 15))[
+    ifelse (not any? other students in-cone 2 30 and (not any? patches with [meat? or pizza? or salad? or pasta? or is-wall?] in-cone 2 15))[
       fd 0.5
+      ;ifelse target = meat or target = pasta [follow-link] [fd 0.5]
     ][
       ifelse [is-exit?] of target [
         fd .5
       ][
-        ; this statement implies the student is not moving, so decrease their patience timer
-        if not any? patches in-radius 3 with [meat? or salad? or pasta? or pizza?] [ ;only decrease patience timer if not getting food
-          set patience patience - 1
-        ]
-
-        ; if student reaches its patience limit, then just go to the exit and leave angrily!
-        ; student color becomes red for visualization
-        if patience = 0[
-          set target one-of patches with [is-exit?]
-          face target
-          set color red
-        ]
+        update-patience
       ]
     ]
-
 
     ; Checks if an agent has reached a station and has it grab food
     if any? patches with [meat? or pizza? or pasta? or salad?] in-radius 2[
@@ -152,10 +234,55 @@ to move
     ]
   ]
 
-  ; If food-shortage is on, updates food left and refill times
-  if food-shortage? [ ask patches with [pcolor = brown] [food-trays] ]
-  wait 0.025
+  ; update food and refill trays if food-shortage? is on
+  refill-trays?
+
+  ;wait 0.025
   tick
+  set-time
+  top-of-the-hour-influx
+end
+
+
+;updates a student's patience timer
+to update-patience
+  ; this statement implies the student is not moving, so decrease their patience timer
+  if not any? patches in-radius 3 with [meat? or salad? or pasta? or pizza?] [ ;only decrease patience timer if not getting food
+    set patience patience - 1
+  ]
+
+  ; if student reaches its patience limit, then just go to the exit and leave angrily!
+  ; student color becomes red for visualization
+  if patience = 0[
+    set target one-of patches with [is-exit?]
+    face target
+    set color red
+  ]
+end
+
+
+; If food-shortage is on, updates food left and refill times
+to refill-trays?
+  if food-shortage? [
+
+    ; Servers move to refill food trys
+    ask servers [
+      ifelse [pcolor] of target = brown and not any? patches with [pcolor = brown] in-cone 3 10 [
+        face target
+        fd 0.25
+      ][
+        if [pcolor] of target != brown [ ; if the tray is empty, refill it!
+          ifelse home-patch = patch-here [
+            setxy [pxcor] of home-patch [pycor] of home-patch
+          ][
+            face home-patch
+            fd 0.25
+          ]
+        ]
+      ]
+    ]
+    ask patches with [pcolor = brown] [food-trays]
+  ]
 end
 
 
@@ -210,18 +337,28 @@ to new-target
 end
 
 
-; Spawn 20 students in the dining hall with variables initialized randomly
+; Spawn one student at the entrance with variables initialized
 to spawn-student
   if count students < student-count [    ; at least for now, limit number of students that can be in the dining hall
     create-students 1 [
-      move-to one-of patches with [is-entrance? and not any? turtles-here]   ;spawn at the entrance
+      move-to one-of patches with [is-entrance? and not any? students-here]   ;spawn at the entrance
       set grab-food-timer grab-food-time
       set size 2
       set color (blue - 1 + random-float 4) ; set varied color for nice visualization
       set shape "person"
-      set patience 60 ; randomly choose amount of time to wait until the student is fed up with waiting (between 1 minute and 15 minutes)
+      set patience (random max-patience) - min-patience ; randomly choose amount of time to wait until the student is fed up with waiting (between 1 minute and 15 minutes)
 
-      set target one-of options-entrance
+      let random-choice random-float 1
+      ifelse random-choice < p-omnivorous[
+        set target meat
+      ][
+        ifelse random-choice < 0.9 [
+         set target pizza
+        ][
+          set target salad
+        ]
+      ]
+      ;set target one-of options-entrance
       face target
     ]
   ]
@@ -229,7 +366,9 @@ end
 
 ; Called by patches who need trays refilled
 to food-trays
-  set refill-timer refill-timer - 1
+  if any? turtles with [color = brown] in-radius 3.5 [
+    set refill-timer refill-timer - 1
+  ]
 
   if refill-timer = 0 [
     set servings-left serving-count
@@ -239,20 +378,52 @@ to food-trays
     if self = meat  [set pcolor 125.7]
     if self = pasta [set pcolor 116.9]
 
-    set refill-timer serving-count * 5
+    set refill-timer serving-count * 3
   ]
 end
+
+
+; dynamically increase the number of students entering the dining hall depending on the time
+; as we know most students have class at roughly the top of every hour
+; works best if p-student < 0.03
+; NOTE: only works for one day cycle (for now)
+to top-of-the-hour-influx
+  if influx-students?[
+    if ticks mod 4 = 0[
+      if minute >= 45 [
+        set p-student precision (p-student + 0.0002) 5 ; slowly increase the probability of students entering for the next 15 minutes
+      ]
+      if minute >= 55 [ ; dont decrease p-student at the beginning of the simulation
+        set p-student precision (p-student - 0.0006) 5; rapidly decrease the number of students entering (back to original p-students)
+      ]
+      if hour = 12 and minute < 15[
+        set p-student precision (p-student + 0.0003) 5
+      ]
+      if hour = 12 and minute >= 15[
+        set p-student precision (p-student - 0.0001) 5
+      ]
+      ;set p-student abs p-student ;in case p-student ever goes negative, make sure it's positive
+    ]
+  ]
+end
+
+
+
+
+
+
+
 @#$#@#$#@
 GRAPHICS-WINDOW
-232
+274
 10
-760
+802
 669
 -1
 -1
 13.0
 1
-10
+16
 1
 1
 1
@@ -328,9 +499,9 @@ SLIDER
 199
 p-student
 p-student
-0
-0.5
-0.369
+0.005
+0.3
+0.02
 0.001
 1
 NIL
@@ -345,7 +516,7 @@ student-count
 student-count
 1
 200
-99.0
+200.0
 1
 1
 NIL
@@ -358,9 +529,9 @@ SLIDER
 275
 min-patience
 min-patience
-11
-120
-120.0
+180
+360
+360.0
 1
 1
 NIL
@@ -373,9 +544,9 @@ SLIDER
 314
 max-patience
 max-patience
-120
-1200
-608.0
+360
+2400
+1958.0
 1
 1
 NIL
@@ -383,9 +554,9 @@ HORIZONTAL
 
 SWITCH
 20
-360
+400
 161
-393
+433
 food-shortage?
 food-shortage?
 0
@@ -394,14 +565,14 @@ food-shortage?
 
 SLIDER
 19
-398
+438
 191
-431
+471
 serving-count
 serving-count
 5
 50
-12.0
+25.0
 1
 1
 NIL
@@ -409,11 +580,11 @@ HORIZONTAL
 
 PLOT
 7
-442
+482
 224
-606
-plot 1
-seconds
+646
+students got food vs did not
+seconds / 4
 count students
 0.0
 10.0
@@ -426,10 +597,45 @@ PENS
 "default" 1.0 0 -11221820 true "" "plot students-got-food-count"
 "pen-1" 1.0 0 -2674135 true "" "plot students-leaving-hungry-count"
 
+SLIDER
+18
+345
+190
+378
+p-vegetarians
+p-vegetarians
+0
+1
+0.15
+0.01
+1
+NIL
+HORIZONTAL
+
+SWITCH
+99
+113
+243
+146
+influx-students?
+influx-students?
+0
+1
+-1000
+
 @#$#@#$#@
 ## TERM PROJECT - Ross Dining Hall simulation
 We have neither given nor received any unauthorized aid on this assignment.
 -Kevin Hernandez, Felix Velez
+
+
+Due to the slowness of students, we have changed one second to be equivalent to four ticks in this simulation.
+
+This program is meant to simulate traffick in Ross Dining hall. We are keeping track of the times when the dining halls get busy and how many students are getting full meals vs how many are leaving hungry.
+
+We attempted to recreate typical behavior in the dining halls with certain aspects simplified. For example, students cutting in line is fairly frequent, but we limited that heavily in our program. We are also only focused on the mornings and afternoon times since those are the times when when the majority of students would be busy with classes.
+
+We have students randomly choose stations to
 @#$#@#$#@
 default
 true
