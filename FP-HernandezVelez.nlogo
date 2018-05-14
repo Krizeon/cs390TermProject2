@@ -5,8 +5,6 @@
 ; TERM PROJECT - Ross Dining Hall simulation
 
 
-__includes ["heap2.nls"]
-
 globals [
   preference-list                ; a list of the possible food preferences to be chosen at random
   patience-list                  ; more specific variations for student patience
@@ -413,7 +411,6 @@ end
 
 
 
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 274
@@ -502,7 +499,7 @@ p-student
 p-student
 0
 0.5
-0.035
+0.0
 0.001
 1
 NIL
@@ -517,7 +514,7 @@ student-count
 student-count
 1
 200
-99.0
+0.0
 1
 1
 NIL
@@ -532,7 +529,7 @@ min-patience
 min-patience
 180
 360
-360.0
+0.0
 1
 1
 NIL
@@ -547,7 +544,7 @@ max-patience
 max-patience
 360
 2400
-2400.0
+0.0
 1
 1
 NIL
@@ -573,7 +570,7 @@ serving-count
 serving-count
 5
 50
-25.0
+0.0
 1
 1
 NIL
@@ -607,7 +604,7 @@ p-vegetarians
 p-vegetarians
 0
 1
-0.25
+0.0
 0.01
 1
 NIL
