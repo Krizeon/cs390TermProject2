@@ -11,13 +11,13 @@ globals [
   grab-food-time                 ; time it takes to get a plate of food when at a station
   students-got-food-count        ; # of students that have gotten food
   students-leaving-hungry-count  ; # of students who leave without getting a full meal
-  p-omnivorous
+  p-omnivorous ; inverse of p-vegetarians (in interface), basically the probability that a student will get meat
 
   ;easier to know which patch we're talking about
-  meat
-  salad
-  pizza
-  pasta
+  meat ; patch holding meat station
+  salad ; patch holding salad station
+  pizza ; patch holding pizza station
+  pasta ; patch holding pasta station
 
   ; Used for calculating the current time of day (relative to the simulation)
   hour ; current hour
@@ -39,9 +39,8 @@ globals [
 
 ]
 
-breed [ students student ]
-breed [ servers server ]
-breed [ points point ]
+breed [ students student ] ; student population (blue colored people)
+breed [ servers server ] ; servers at the corners of the world (dark green colored people)
 
 patches-own [
   is-exit?         ; true for the red patches agents exit through.
@@ -73,12 +72,12 @@ to setup
   setup-patches
   setup-servers
 
-  set ticks-per-second 4
-  set hour 7                            ; initialize the hour to 7am
-  set p-omnivorous (1 - p-vegetarians)
-  set grab-food-time 36
-  set students-got-food-count 0
-  set students-leaving-hungry-count 0
+  set ticks-per-second 4 ; the amount of ticks per second
+  set hour 11                           ; initialize the hour to 7am
+  set p-omnivorous (1 - p-vegetarians) ;inverse of p-vegetarians
+  set grab-food-time 36 ; the amount of *ticks* it takes to grab food at a given station
+  set students-got-food-count 0 ; the count of students that got food before leaving
+  set students-leaving-hungry-count 0 ;the count of students that left hungry or with only a partial meal (due to very long lines)
 end
 
 
@@ -86,7 +85,7 @@ end
 ;    -Resets to 7am when it reaches 1pm
 to set-time
   let time ticks / ticks-per-second
-  set second floor (time) mod 60
+  set second floor (time) mod 60 ; used floor to prevent displaying decimal numbers
   set minute (floor (time / 60)) mod 60
   if minute = 0 and second = 0 and ticks mod ticks-per-second = 0 [set hour hour + 1]
 
@@ -142,7 +141,6 @@ to setup-patches
 end
 
 
-
 ; Creates the attendants for each station
 to setup-servers
   ;server for pizza
@@ -189,50 +187,52 @@ end
 
 
 ; Core function
+; Handles movement and behaviors of all agents on screen, servers and students.
+; Also updates patches according to their behavior, every tick.
 to move
   if random-float 1.0 < p-student and any? patches with [is-entrance? and not any? students-here][
     spawn-student
   ]
-
   ask students[
 
     ;turtles only move if there is not a station or another person in front of them
     ;    UNLESS they are heading towards the exit
     ifelse (not any? other students in-cone 2 30 and (not any? patches with [meat? or pizza? or salad? or pasta? or is-wall?] in-cone 2 15))[
       fd 0.5
-      ;ifelse target = meat or target = pasta [follow-link] [fd 0.5]
     ][
-      ifelse [is-exit?] of target [
+
+      ifelse [is-exit?] of target [ ;if the target is the exit, then don't worry about collision with other students since they are not in line
         fd .5
       ][
-        update-patience
+        update-patience ; ticks patience down since they are not moving
       ]
     ]
-
     ; Checks if an agent has reached a station and has it grab food
     if any? patches with [meat? or pizza? or pasta? or salad?] in-radius 2[
       get-food
     ]
-
-    ; Update counts of students who were able to eat and who left hungry
-    ;     kill each agent when they reach the exit.
-    if [is-exit?] of patch-here [
-      ifelse patience = 0[
-        set students-leaving-hungry-count students-leaving-hungry-count + 1
-      ][
-        set students-got-food-count students-got-food-count + 1
-      ]
-      die
-    ]
+    handle-exiting
   ]
 
   ; update food and refill trays if food-shortage? is on
   refill-trays?
-
-  ;wait 0.025
   tick
-  set-time
-  top-of-the-hour-influx
+  set-time ; update the simulations's time
+  top-of-the-hour-influx ;will only work if influx-students? is true
+end
+
+
+; Update counts of students who were able to eat and who left hungry
+;     kill each agent when they reach the exit.
+to handle-exiting
+  if [is-exit?] of patch-here [
+    ifelse patience = 0[
+      set students-leaving-hungry-count students-leaving-hungry-count + 1
+    ][
+      set students-got-food-count students-got-food-count + 1
+    ]
+    die
+  ]
 end
 
 
@@ -279,6 +279,8 @@ end
 
 
 ; Agents need a few seconds to grab their food!
+; when they get food, search for another target
+; serving count is also decreased for a stations
 to get-food
   if [pcolor] of target != brown[
     set grab-food-timer grab-food-timer - 1
@@ -307,8 +309,7 @@ end
 
 ; Has agents randomly choose a new target patch when they've gotten food at a station
 to new-target
-
-    ; Check which station they are by and randomly choose a possible decision from there
+    ; Check which station they are by and randomly choose a new destination from there
     if any? patches in-cone 2 15 with [meat?] [
       set target one-of options-meat-station
       if target = pizza or [is-exit?] of target [ fd 1]
@@ -340,6 +341,7 @@ to spawn-student
       set shape "person"
       set patience (random max-patience) - min-patience ; randomly choose amount of time to wait until the student is fed up with waiting (between 1 minute and 15 minutes)
 
+      ; randomly choose a destination at the entrance
       let random-choice random-float 1
       ifelse random-choice < p-omnivorous[
         set target meat
@@ -356,15 +358,20 @@ to spawn-student
   ]
 end
 
-; Called by patches who need trays refilled
+
+; Called by patches who need their tray refilled
 to food-trays
+
+  ; Only begin refilling when the server is nearby
   if any? turtles with [color = green - 2] in-radius 3.5 [
     set refill-timer refill-timer - 1
   ]
 
+  ; When countdown finished, reset servings-left
   if refill-timer = 0 [
     set servings-left serving-count
 
+    ;revert back to original color
     if self = salad [set pcolor  64.9]
     if self = pizza [set pcolor  44.9]
     if self = meat  [set pcolor 125.7]
@@ -394,7 +401,6 @@ to top-of-the-hour-influx
       if hour = 12 and minute >= 15[
         set p-student precision (p-student - 0.0001) 5
       ]
-      ;set p-student abs p-student ;in case p-student ever goes negative, make sure it's positive
     ]
   ]
 end
@@ -428,7 +434,7 @@ GRAPHICS-WINDOW
 0
 0
 1
-seconds
+ticks
 30.0
 
 BUTTON
@@ -491,7 +497,7 @@ p-student
 p-student
 0.005
 0.3
-0.1284
+0.009
 0.001
 1
 NIL
@@ -544,9 +550,9 @@ HORIZONTAL
 
 SWITCH
 20
-400
+417
 161
-433
+450
 food-shortage?
 food-shortage?
 0
@@ -555,9 +561,9 @@ food-shortage?
 
 SLIDER
 19
-438
+359
 191
-471
+392
 serving-count
 serving-count
 5
@@ -569,44 +575,44 @@ NIL
 HORIZONTAL
 
 PLOT
-7
-482
-224
-646
+817
+41
+1252
+288
 students got food vs did not
-seconds / 4
-count students
+ticks
+students
 0.0
 10.0
 0.0
 10.0
 true
-false
+true
 "" ""
 PENS
-"default" 1.0 0 -11221820 true "" "plot students-got-food-count"
-"pen-1" 1.0 0 -2674135 true "" "plot students-leaving-hungry-count"
+"students who got food" 1.0 0 -11221820 true "" "plot students-got-food-count"
+"students who left hungry" 1.0 0 -2674135 true "" "plot students-leaving-hungry-count"
 
 SLIDER
-18
-345
-190
-378
+19
+320
+191
+353
 p-vegetarians
 p-vegetarians
 0
 1
-1.0
+0.36
 0.01
 1
 NIL
 HORIZONTAL
 
 SWITCH
-99
-113
-243
-146
+21
+456
+165
+489
 influx-students?
 influx-students?
 0
@@ -665,11 +671,13 @@ Besides the green servers, the other agents in the simulation are all students. 
 The patience variable is a countdown that, when zero, the student, cannot wait any longer and leaves the dining hall without a full meal. When they leave due to impatience, they will turn red for visualization.
 
 
+
 When a student reaches a food station, it takes a few seconds to get their serving onto their plate. There is a countdown that needs to hit zero before the student has gotten their food and moves to their next destination. 
 
 Also, when this "grab-food" countdown reaches zero, the number of servings left at the station decreases by one.
 
 If a student's next destination is the exit, then they will ignore the possibility of another student being in front of them. This is because we are focusing on the time it takes to actually get food. This also helps prevent a case where two students cannot move at all because they would be moving on opposite directions.
+
 
 
 
