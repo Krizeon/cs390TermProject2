@@ -19,11 +19,10 @@ globals [
   pizza
   pasta
 
-
-  ; Used for calculating the current time of day
-  hour
-  minute
-  second
+  ; Used for calculating the current time of day (relative to the simulation)
+  hour ; current hour
+  minute ; current minute
+  second ; current second
   ticks-per-second
 
   ;Attendants that will go and refill trays when they are empty
@@ -106,7 +105,8 @@ to set-time
   ask patch 6 48 [set plabel-color black set plabel (word hour ":" temp-minute ":" temp-second)]
 end
 
-;Initialize patches
+
+;Initialize patches' instance variables
 to setup-patches
   ; Initialize all necessary variables first
   ask patches[
@@ -381,21 +381,21 @@ to top-of-the-hour-influx
   if influx-students?[
     if ticks mod 4 = 0[
       if minute >= 45 [
-        set p-student p-student + 0.0002 ; slowly increase the probability of students entering for the next 15 minutes
+        set p-student precision (p-student + 0.0002) 5 ; slowly increase the probability of students entering for the next 15 minutes
       ]
-      if minute < 5 and hour != 7 [ ; dont decrease p-student at the beginning of the simulation
-        set p-student p-student - 0.0006 ; rapidly decrease the number of students entering (back to original p-students)
+      if minute >= 55 [ ; dont decrease p-student at the beginning of the simulation
+        set p-student precision (p-student - 0.0006) 5; rapidly decrease the number of students entering (back to original p-students)
       ]
       if hour = 12 and minute < 15[
-        set p-student p-student + 0.0003
+        set p-student precision (p-student + 0.0003) 5
       ]
       if hour = 12 and minute >= 15[
-        set p-student p-student - 0.0001
+        set p-student precision (p-student - 0.0001) 5
       ]
+      ;set p-student abs p-student ;in case p-student ever goes negative, make sure it's positive
     ]
   ]
 end
-
 
 
 
@@ -490,7 +490,7 @@ p-student
 p-student
 0.005
 0.3
--0.029799999999989373
+0.02
 0.001
 1
 NIL
@@ -505,7 +505,7 @@ student-count
 student-count
 1
 200
-152.0
+200.0
 1
 1
 NIL
@@ -931,7 +931,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.0.1
+NetLogo 6.0.2
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
