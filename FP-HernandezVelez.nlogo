@@ -652,13 +652,36 @@ The "min-patience" and "max-patience" sliders are used to set the lowest and hig
 
 "p-vegetarians" is the probability that a student is a vegetarian. If they are a vegetarian they, will not head to the meat (magenta) station and instead will head to the salad (green) station.
 
+There is a switch called "food-shortage?" that determines whether food at each station is limited and will need to be filled occasionally. 
+
+When the switch is turned on, each station has a serving count determined by the slider "serving-count". This count is applied only when "setup" is pressed. 
+
+**If the user wants to check how another serving-count value affects the simulation, they will need to reset the program with the "setup" button
+
+
+Lastly, there is a graph at the bottom. it records all of the students who got a full meal in green and those who did not in red.
+
 
 
 ### Agent Behavior
 
-Besides the green servers, the other agents in the simulation are all students. They come in from the entrance (blue patches) and choose which food station to go to. They will only move forward if there is not another student in front if them. If there is, then their patience timer decreases (unless they are right at the station waiting for the food tray to be refill). 
+Besides the green servers, the other agents in the simulation are all students. They come in from the entrance (blue patches) and choose which food station to go to. They will only move forward if there is not another student in front if them (thus lines form). If there is, then their patience timer decreases (unless they are right at the station waiting for the food tray to be refill). 
+
 
 The patience variable is a countdown that, when zero, the student, cannot wait any longer and leaves the dining hall without a full meal. When they leave due to impatience, they will turn red for visualization.
+
+
+
+When a student reaches a food station, it takes a few seconds to get their serving onto their plate. There is a countdown that needs to hit zero before the student has gotten their food and moves to their next destination. 
+
+Also, when this "grab-food" countdown reaches zero, the number of servings left at the station decreases by one.
+
+If a student's next destination is the exit, then they will ignore the possibility of another student being in front of them. This is because we are focusing on the time it takes to actually get food. This also helps prevent a case where two students cannot move at all because they would be moving on opposite directions.
+
+
+
+
+
 @#$#@#$#@
 default
 true
@@ -965,7 +988,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.0.2
+NetLogo 6.0.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
